@@ -1,6 +1,9 @@
 import discord
-from discord.ext.commands import Bot, command, Cog
+from discord.ext.commands import Bot, command, CommandNotFound
+from dotenv import load_dotenv
+import os
 import logging
+import praw
 
 class Ron(Bot):
     def __init__(self, *args, **kwargs):
@@ -8,7 +11,14 @@ class Ron(Bot):
 
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%H:%M:%S')
 
-        self.add_command(self.placeholder)
+        load_dotenv()
+        self.reddit = praw.Reddit(
+            client_id = os.getenv("REDDIT_ID"),
+            client_secret = os.getenv("REDDIT_SECRET"),
+            user_agent = "Discord bot script"
+        )
+
+        self.add_command(self.deepdives)
 
     #################################    EVENTS    #################################
 
@@ -35,10 +45,58 @@ class Ron(Bot):
             return
         raise error
 
-    # COMMANDS#################################    COMMANDS    #################################
+    #################################    COMMANDS    #################################
 
-    @command(name="placeholder")
-    async def placeholder(ctx, arg1, *args):
-        pass
+    @command(name="deepdives", pass_context=True, aliases=["dd", "dds", "deepdive"])
+    async def deepdives(ctx):
+        logging.info("Collecting weekly deep dives from Reddit.")
+
+        reddit = ctx.bot.reddit
+
+        if reddit is None:
+            logging.error("Reddit session not available.")
+            await ctx.send("Sorry, seems like I'm unable to connect to Reddit.")
+
+        subreddit = reddit.subreddit("DeepRockGalactic")
+
+        # Deep Dive Thread is stickied so it will always be in the first few posts of Hot
+        deep_dive_message = ""
+        for submission in subreddit.hot(limit=5):
+            if submission.stickied and "Weekly Deep Dives Thread" in submission.title:
+                url = submission.url
+                content = submission.selftext.split("\n")
+                idx = 0
+                while idx < len(content):
+                    line = content[idx]
+                    if line.startswith("**Deep Dive**") or line.startswith("**Elite Deep Dive**"):
+                        try:
+                            deep_dive_message += ctx.bot.format_deep_dive(content[idx], content[idx + 4:idx + 7]) + "\n"
+                        except IndexError as e:
+                            logging.error("Deep dive post was found, but there was an error while parsing. Reddit post may not be formatted normally.")
+                            logging.error(f"Error was \"{e}\" in format_deep_dive()")
+                            await ctx.send("Hmm, seems like I ran into a problem parsing the deep dives thread. The error has been logged.")
+                            return
+                        idx += 8 # don't need to process the next few lines
+                    else:
+                        idx += 1
+
+        if deep_dive_message.strip() == "":
+            logging.error("Deep dive post was not found.")
+            await ctx.send("Hmm, seems like I wasn't able to find the Weekly Deep Dives thread.")
+        else:
+            logging.info("Deep dives successfully retrieved. Sending message.")
+            deep_dive_message = "Hey there, this is what I found from r/DeepRockGalactic:\n" + deep_dive_message + f"\n<{url}>"
+            await ctx.send(deep_dive_message)
 
     #################################    HELPERS    #################################
+
+    # Deep Dives are formatted as a table within the original Reddit post
+    # info_line is the table header formatted as "Deep Dive Type | Name | Location"
+    # stages are the three table rows formatted each as "| Stage # | Primary | Secondary | Anomalies | Warning |"
+    def format_deep_dive(self, info_line, stages):
+        deep_dive_info = "\n" + info_line
+        for index, stage in enumerate(stages):
+            parts = [s.strip() for s in stage.split("|")]
+            deep_dive_info += f"\nStage {index + 1} | {parts[2]}, {parts[3]} | {parts[4]} | {parts[5]}"
+
+        return deep_dive_info
