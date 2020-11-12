@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import logging
 import praw
+import random
 
 class Ron(Bot):
     def __init__(self, *args, **kwargs):
@@ -20,6 +21,18 @@ class Ron(Bot):
 
         self.add_command(self.deepdives)
 
+        # https://deeprockgalactic.gamepedia.com/Voicelines
+        self.drg_salutes = ["Rock on!", "Rock and stone.. Yeeaaahhh!", "Rock and stone forever!",
+                            "ROCK... AND... STONE!", "Rock and stone!", "For rock and stone!",
+                            "We are unbreakable!", "Rock and roll!", "Stone and rock!",
+                            "Rock and roll and stone!", "That's it lads! Rock and stone!",
+                            "Like that! Rock and stone!", "Yeaahhh! Rock and stone!",
+                            "None can stand before us!", "Rock solid!", "Stone and rock! Oh wait...",
+                            "Come on guys! Rock and stone!", "If you don't rock and stone, you ain't comin' home!",
+                            "We fight for rock and stone!", "We rock!", "Rock and stone everyone!", "Stone!",
+                            "Yeah yeah, rock and stone.", "Rock and stone in the heart!", "For teamwork!",
+                            "Did I hear a rock and stone?"]
+
     #################################    EVENTS    #################################
 
     async def on_ready(self):
@@ -33,7 +46,10 @@ class Ron(Bot):
         content = message.content.strip().lower()
         author_mention = "<@!" + str(message.author.id) + ">"
 
-        # no functionality here yet
+        if "rock and stone" in content or "for karl" in content:
+            logging.info(f"Responding with salute to \"{message.content}\" sent by {message.author}")
+            response = author_mention + " " + random.choice(self.drg_salutes)
+            await message.channel.send(response)
 
         # once we have checked the full message, process any commands that may be present
         await self.process_commands(message)
